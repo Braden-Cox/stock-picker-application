@@ -24,3 +24,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Docker volumes and temp files
+postgres_data/
+
+# Python egg info
+*.egg-info/
+dist/
+build/
