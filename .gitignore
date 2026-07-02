@@ -1,0 +1,26 @@
+
+# Environment
+.env
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Data files (generated, not source)
+data/*.json
+!data/common_words.json
+
+# Docker
+*.env.local
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

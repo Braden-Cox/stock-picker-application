@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS posts (
+    post_id VARCHAR(50) PRIMARY KEY,
+    tickers VARCHAR(5)[] NOT NULL,
+    username VARCHAR(50) NOT NULL,
+    user_id VARCHAR(50) NOT NULL,
+    text TEXT NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    like_count INT NOT NULL,
+    repost_count INT NOT NULL,
+    url VARCHAR(255) NOT NULL,
+    time_scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    list_status VARCHAR(20) DEFAULT 'unknown',
+    is_related BOOLEAN DEFAULT NULL,
+    sentiment VARCHAR(10) DEFAULT NULL,
+    sentiment_score FLOAT DEFAULT NULL,
+    llm_processed BOOLEAN DEFAULT FALSE,
+    is_valid BOOLEAN DEFAULT NULL
+)

@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic-settings
+requests
+anthropic
+yfinance
+python-dotenv
+pydantic-settings
