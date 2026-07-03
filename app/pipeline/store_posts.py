@@ -15,6 +15,8 @@ def store_posts(posts, db_session):
         .all()
     }
     for post in posts:
+        if (post["like_count"] + (post["repost_count"] * 2)) < 5:
+            continue  # Skip posts that don't meet the threshold
         if (
             post["post_id"] not in existing_post_ids
             and post["post_id"] not in inserted_in_run

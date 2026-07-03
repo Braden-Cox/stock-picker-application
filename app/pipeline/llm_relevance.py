@@ -1,6 +1,7 @@
 from app.database import get_db
 from app.services.gemini import classify_relevance_with_gemini
 from app.models.post import Post
+from datetime import datetime
 
 # query postgresql database for posts
 
@@ -17,7 +18,7 @@ def get_posts_from_db(db_session, batch_size=200):
 
 
 # send 50 posts to the gemini model for classification at a time
-def classify_posts_with_gemini(posts, batch_size=50):
+def get_relevance(posts, batch_size=50):
     results = []
     for i in range(0, len(posts), batch_size):
         batch = posts[i : i + batch_size]
@@ -30,7 +31,6 @@ def classify_posts_with_gemini(posts, batch_size=50):
 def update_db(posts, classifications, db_session):
     for post, is_relevant in zip(posts, classifications):
         post.is_related = is_relevant
-        post.llm_processed = True
     db_session.commit()
 
 
@@ -40,7 +40,7 @@ def run_relevance_pipeline(db_session, limit=None):
         if not posts:
             print("No more unprocessed posts found. Exiting.")
             break
-        classifications = classify_posts_with_gemini(posts)
+        classifications = get_relevance(posts)
         update_db(posts, classifications, db_session)
         if limit:
             limit -= len(posts)
@@ -60,6 +60,7 @@ def get_args():
     return parser.parse_args()
 
 def main():
+    start_time = datetime.now()
     args = get_args()
     db_session = next(get_db())
     try:
@@ -71,6 +72,8 @@ def main():
     finally:
         db_session.close()
     print("Relevance classification pipeline completed successfully.")
+    end_time = datetime.now()
+    print(f"Total time taken: {end_time - start_time}")
 
 
 if __name__ == "__main__":

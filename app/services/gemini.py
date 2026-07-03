@@ -1,3 +1,4 @@
+import time
 from google import genai
 from app.config import settings
 from pydantic import BaseModel
@@ -32,4 +33,5 @@ def classify_relevance_with_gemini(posts: List[str]) -> RelevanceResponse:
     if output.startswith("```"):
         output = output.split("\n", 1)[1]
         output = output.rsplit("```", 1)[0]
+    time.sleep(.1)  # Sleep for 0.1 seconds as a buffer to avoid rate limiting
     return RelevanceResponse.model_validate_json(output.strip())

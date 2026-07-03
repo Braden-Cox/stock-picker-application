@@ -1,11 +1,7 @@
 from datetime import datetime, timedelta, timezone
-import requests
 import os
 import json
-from app.config import settings
-
-getXAPI_key = settings.GETXAPI_KEY
-
+from app.service.getx import getXAPI_scrape_posts
 
 
 def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="en"):
@@ -35,16 +31,8 @@ def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="e
             scrape_start_time = datetime.now(timezone.utc)
             while call_count < limit_calls:
                 try:
-                    params = {"q": query, "product": "Latest"}
-                    if cursor:
-                        params["cursor"] = cursor
-                    response = requests.get(
-                        "https://api.getxapi.com/twitter/tweet/advanced_search",
-                        params=params,
-                        headers={"Authorization": "Bearer " + getXAPI_key},
-                    )
+                    data = getXAPI_scrape_posts(query, cursor)
                     call_count += 1
-                    data = response.json()
                     has_more = data["has_more"]
                     next_cursor = data["next_cursor"]
                     cursor = next_cursor
@@ -96,6 +84,7 @@ def lang(language):
     else:
         return f"lang:{language}"
 
+
 def get_args():
     import argparse
 
@@ -128,7 +117,7 @@ def get_args():
 def main():
     from app.pipeline.fetch_tickers import fetch_tickers
     from app.pipeline.clean_tickers import clean_tickers
-    
+
     args = get_args()
     tickers = fetch_tickers()
     cleaned_tickers = clean_tickers(tickers)
@@ -137,7 +126,7 @@ def main():
         all=args.all,
         limit_tickers=args.limit_tickers,
         limit_calls=args.limit_calls,
-        language=args.lang
+        language=args.lang,
     )
     print(f"Scraped {len(posts)} posts.")
     output_file = os.path.join(
