@@ -30,7 +30,7 @@ def store_tickers(tickers, db_session):
     db_session.commit()
 
 
-if __name__ == "__main__":
+def main():
     from app.pipeline.clean_tickers import clean_tickers
     from app.pipeline.fetch_tickers import fetch_tickers
 
@@ -45,3 +45,7 @@ if __name__ == "__main__":
         raise e
     finally:
         db_session.close()
+
+
+if __name__ == "__main__":
+    main()

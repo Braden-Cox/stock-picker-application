@@ -8,3 +8,4 @@ anthropic
 yfinance
 python-dotenv
 pydantic-settings
+google-genai

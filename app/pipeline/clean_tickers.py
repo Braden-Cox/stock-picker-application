@@ -1,9 +1,9 @@
 import json
-import os
+from os import path
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = path.dirname(path.dirname(path.dirname(path.abspath(__file__))))
 
-with open(os.path.join(BASE_DIR, "data/common_words.json")) as f:
+with open(path.join(BASE_DIR, "data/common_words.json")) as f:
     COMMON_WORDS = json.load(f)
 SPECIAL_CHARACTERS = set("!@#$%^&*()_+-=[]{}|;:'\",.<>?/`~")
 
@@ -50,9 +50,13 @@ def clean_tickers(tickers):
     return cleaned_tickers
 
 
-if __name__ == "__main__":
+def main():
     from app.pipeline.fetch_tickers import fetch_tickers
 
     tickers = clean_tickers(fetch_tickers())
-    with open(os.path.join(BASE_DIR, "data/cleaned_tickers.json"), "w") as f:
+    with open(path.join(BASE_DIR, "data/cleaned_tickers.json"), "w") as f:
         json.dump(tickers, f, indent=4)
+
+
+if __name__ == "__main__":
+    main()

@@ -31,6 +31,10 @@ def fetch_tickers():
     return tickers
 
 
-if __name__ == "__main__":
+def main():
     tickers = fetch_tickers()
     print(tickers)
+
+
+if __name__ == "__main__":
+    main()
