@@ -36,7 +36,9 @@ def update_db(posts, classifications, db_session):
 
 def run_relevance_pipeline(db_session, limit=None):
     while True:
-        posts = get_posts_from_db(db_session, batch_size=min(200, limit) if limit else 200)
+        posts = get_posts_from_db(
+            db_session, batch_size=min(200, limit) if limit else 200
+        )
         if not posts:
             print("No more unprocessed posts found. Exiting.")
             break
@@ -47,10 +49,13 @@ def run_relevance_pipeline(db_session, limit=None):
             if limit <= 0:
                 break  # Exit after processing the specified limit of posts
 
+
 def get_args():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run the relevance classification pipeline.")
+    parser = argparse.ArgumentParser(
+        description="Run the relevance classification pipeline."
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -58,6 +63,7 @@ def get_args():
         help="Number of posts to process (default: process all unprocessed posts)",
     )
     return parser.parse_args()
+
 
 def main():
     start_time = datetime.now()
