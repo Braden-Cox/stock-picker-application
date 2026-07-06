@@ -1,13 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import os
 import json
-from app.service.getx import getXAPI_scrape_posts
+from app.services.getx import getXAPI_scrape_posts
 
 
-def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="en"):
-    BASE_DIR = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
+def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="en", user_id=None, date_start=None, date_end=None):
     posts = []
     has_more = True
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime(
@@ -21,7 +18,9 @@ def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="e
             if not ticker["is_active"]:
                 print(f"Skipping inactive ticker: {ticker['ticker']}")
                 continue
-            if ticker["needs_prefix"]:
+            if user_id != None:
+                query = f"from:{user_id} {ticker['ticker']} since:{date_start} until:{date_end} {lang(language)}".strip()
+            elif ticker["needs_prefix"]:
                 query = f"${ticker['ticker']} since:{seven_days_ago} {lang(language)}".strip()
             else:
                 query = f"{ticker['ticker']} since:{seven_days_ago} {lang(language)}".strip()
@@ -73,6 +72,57 @@ def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="e
             print(f"Reached limit of {i} tickers scraped. Stopping.")
             break
         j += 1
+    end_time = datetime.now(timezone.utc)
+    print(f"Total time taken: {end_time - start_time}")
+    return posts
+
+def scrape_posts_for_user(all=False, limit_calls=2, language="en", user_id=None, date_start=None, date_end=None):
+    query = f"from:{user_id} since:{date_start} until:{date_end} {lang(language)}".strip()
+    print(f"Scraping posts for user: {user_id}")
+    cursor = None
+    posts = []
+    call_count = 0
+    scrape_start_time = datetime.now(timezone.utc)
+    while call_count < limit_calls:
+        try:
+            data = getXAPI_scrape_posts(query, cursor)
+            call_count += 1
+            has_more = data["has_more"]
+            next_cursor = data["next_cursor"]
+            cursor = next_cursor
+            for tweet in data["tweets"]:
+                post = {
+                    "post_id": tweet["id"],
+                    "text": tweet["text"],
+                    "username": tweet["author"]["userName"],
+                    "user_id": tweet["author"]["id"],
+                    "timestamp": tweet["createdAt"],
+                    "like_count": tweet["likeCount"],
+                    "repost_count": tweet["retweetCount"],
+                    "time_scraped_at": datetime.now(timezone.utc).isoformat(),
+                    "is_historical": True,
+                    "url": tweet["url"],
+                }
+                posts.append(post)
+            if all == False:
+                scrape_end_time = datetime.now(timezone.utc)
+                print(
+                    f"Finished scraping posts for user: {user_id} in {scrape_end_time - scrape_start_time}"
+                )
+                break
+            if has_more == False:
+                scrape_end_time = datetime.now(timezone.utc)
+                print(
+                    f"Finished scraping posts for user: {user_id} in {scrape_end_time - scrape_start_time}"
+                )
+                break
+        except Exception as e:
+            print(f"Error scraping posts for user {user_id}: {e}")
+            scrape_end_time = datetime.now(timezone.utc)
+            print(
+                f"Finished scraping posts for user: {user_id} in {scrape_end_time - scrape_start_time}"
+            )
+            break
     end_time = datetime.now(timezone.utc)
     print(f"Total time taken: {end_time - start_time}")
     return posts

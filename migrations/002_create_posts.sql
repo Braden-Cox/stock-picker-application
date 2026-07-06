@@ -14,5 +14,8 @@ CREATE TABLE IF NOT EXISTS posts (
     sentiment VARCHAR(10) DEFAULT NULL,
     sentiment_score FLOAT DEFAULT NULL,
     llm_processed BOOLEAN DEFAULT FALSE,
-    is_valid BOOLEAN DEFAULT NULL
+    is_valid BOOLEAN DEFAULT NULL,
+    is_historical BOOLEAN DEFAULT FALSE,
+    pick_verified BOOLEAN DEFAULT FALSE,
+    user_hit_rate FLOAT DEFAULT NULL
 )

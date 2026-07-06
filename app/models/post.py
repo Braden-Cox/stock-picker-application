@@ -23,3 +23,6 @@ class Post(Base):
     sentiment_score = Column(Float, default=None)
     llm_processed = Column(Boolean, default=False)
     is_valid = Column(Boolean, default=None)
+    is_historical = Column(Boolean, default=False)
+    pick_verified = Column(Boolean, default=False)
+    user_hit_rate = Column(Float, default=None)
