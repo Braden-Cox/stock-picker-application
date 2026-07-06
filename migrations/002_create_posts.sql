@@ -17,5 +17,6 @@ CREATE TABLE IF NOT EXISTS posts (
     is_valid BOOLEAN DEFAULT NULL,
     is_historical BOOLEAN DEFAULT FALSE,
     pick_verified BOOLEAN DEFAULT FALSE,
-    user_hit_rate FLOAT DEFAULT NULL
+    user_hit_rate FLOAT DEFAULT NULL,
+    pick_correct BOOLEAN DEFAULT NULL
 )

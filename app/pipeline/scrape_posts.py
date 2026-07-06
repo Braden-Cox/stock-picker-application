@@ -123,8 +123,8 @@ def scrape_posts_for_user(all=False, limit_calls=2, language="en", user_id=None,
                 f"Finished scraping posts for user: {user_id} in {scrape_end_time - scrape_start_time}"
             )
             break
-    end_time = datetime.now(timezone.utc)
-    print(f"Total time taken: {end_time - start_time}")
+    scrape_end_time = datetime.now(timezone.utc)
+    print(f"Total time taken: {scrape_end_time - scrape_start_time}")
     return posts
 
 

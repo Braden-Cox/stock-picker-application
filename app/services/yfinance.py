@@ -11,5 +11,8 @@ def get_stock_data(ticker, start_date):
         prices = {}
         labels = ["day_0", "day_30", "day_60", "day_90"]
         for i, label in enumerate(labels):
-            prices[label] = data.iloc[i]
+            if i < len(data):
+                prices[label] = data["Close"].iloc[i]
+            else:
+                prices[label] = None
         return prices

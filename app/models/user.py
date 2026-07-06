@@ -16,3 +16,4 @@ class User(Base):
     first_seen = Column(DateTime, default=datetime.now(timezone.utc))
     last_scraped = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
     last_updated = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    last_historical_post = Column(DateTime, default=None)

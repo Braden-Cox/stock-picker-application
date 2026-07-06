@@ -26,3 +26,4 @@ class Post(Base):
     is_historical = Column(Boolean, default=False)
     pick_verified = Column(Boolean, default=False)
     user_hit_rate = Column(Float, default=None)
+    pick_correct = Column(Boolean, default=None)
