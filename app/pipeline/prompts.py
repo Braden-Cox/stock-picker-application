@@ -16,7 +16,7 @@ For each post, return false if it meets the following criteria:
 4. The post mentions a stock only in passing without any actionable insight
 5. A stock is not mentioned
 
-You must respond ONLY with a JSON object with a single key "results" containing an array of boolean values, one per post, in the same order as the input. No explanation, no preamble, no markdown.
+You must respond ONLY with a JSON object with a single key "results" containing an array of objects, one per post, in the same order as the input. Each object must have an "is_relevant" boolean field and a "ticker" field set to null. No explanation, no preamble, no markdown.
 
 Example input:
 1. "I think $TCEHY is going to skyrocket next quarter!"
@@ -24,8 +24,50 @@ Example input:
 3. "I think $TSLA is overvalued at current prices, selling my position."
 
 Example output:
-{"results": [true, false, true]}
+{"results": [
+{"is_relevant": true, "ticker": null},
+{"is_relevant": false, "ticker": null},
+{"is_relevant": true, "ticker": null}
+]}
 """
+
+# Gemini 2.5 flash lite prompt for historical posts, which also need ticker extraction
+# since these posts aren't pre-tagged with a known ticker like weekly-scraped posts are
+HISTORICAL_RELEVANCE_PROMPT = """
+You are a financial content classifier. Your job is to determine whether a given social media post is relevant to stock picking and investment decisions, and if so, identify the specific stock ticker being discussed.
+
+For each post provided, return is_relevant=true based on the following criteria:
+1. The post expresses a buy, sell, or hold opinion on a specific stock
+2. The post contains a prediction for a specific stock
+3. The post provides analysis or commentary on a specific stock's performance
+
+For each post, return is_relevant=false if it meets the following criteria:
+1. The post only mentions a symbol without any opinion, prediction, or analysis
+2. The post is spam, promotional content, or unrelated to stock picking
+3. The post is a news headline with no personal opinion or analysis
+4. The post mentions a stock only in passing without any actionable insight
+5. No stock is mentioned
+6. Multiple unrelated stocks are mentioned with no single clear subject
+
+If is_relevant is true, extract the single stock ticker the post is actually about (uppercase, no leading "$"). If is_relevant is false, set ticker to null.
+
+You must respond ONLY with a JSON object with a single key "results" containing an array of objects, one per post, in the same order as the input. Each object must have an "is_relevant" boolean field and a "ticker" field (string or null). No explanation, no preamble, no markdown.
+
+Example input:
+1. "I think $TCEHY is going to skyrocket next quarter!"
+2. "Check out this amazing deal on $AAPL merchandise!"
+3. "I've been short $TSLA for months, this is going to tank another 30%"
+4. "Markets are up today, interesting times"
+
+Example output:
+{"results": [
+  {"is_relevant": true, "ticker": "TCEHY"},
+  {"is_relevant": false, "ticker": null},
+  {"is_relevant": true, "ticker": "TSLA"},
+  {"is_relevant": false, "ticker": null}
+]}
+"""
+
 
 # Haiku 4.5 prompt batch testing posts for sentiment analysis relating to stock picking
 SENTIMENT_PROMPT = """You are an expert financial sentiment analyst classifying social media stock picks.

@@ -23,30 +23,33 @@ def update_db(posts, sentiments, db_session):
     db_session.commit()
 
 
-def get_sentiment(posts, batch_size=25):
+def get_sentiment(posts, batch_size=25, historical=False):
     results = []
     for i in range(0, len(posts), batch_size):
         batch = posts[i : i + batch_size]
         post_texts = [post.text for post in batch]
-        response = classify_sentiment_with_haiku(post_texts)
+        response = classify_sentiment_with_haiku(post_texts, historical=historical)
         results.extend(response.results)
     return results
 
 
-def run_sentiment_pipeline(db_session, limit=None):
+def run_sentiment_pipeline(db_session, limit=None, posts=None, historical=False):
+    limit = len(posts) if posts else limit
     while True:
-        posts = get_posts_from_db(
-            db_session, batch_size=min(200, limit) if limit else 200
-        )
+        if posts is None:
+            posts = get_posts_from_db(
+                db_session, batch_size=min(200, limit) if limit else 200
+            )
         if not posts:
             print("No more unprocessed posts found. Exiting.")
             break
-        sentiments = get_sentiment(posts)
+        sentiments = get_sentiment(posts, historical=historical)
         update_db(posts, sentiments, db_session)
         if limit:
             limit -= len(posts)
             if limit <= 0:
                 break  # Exit after processing the specified limit of posts
+        posts = None  # Reset posts to None to fetch the next batch in the next iteration
 
 
 def get_args():

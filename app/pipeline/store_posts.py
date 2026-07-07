@@ -1,9 +1,10 @@
 from app.database import get_db
 from app.models.post import Post
+from app.models.user import User
 from os import path
 
 
-def store_posts(posts, db_session):
+def store_posts(posts, db_session, historical=False):
     completed_in_batch = 0
     BATCH_SIZE = 500  # Adjust the batch size as needed
     inserted_in_run = set()  # Track post_ids inserted in this run
@@ -12,6 +13,14 @@ def store_posts(posts, db_session):
         post.post_id
         for post in db_session.query(Post.post_id)
         .filter(Post.post_id.in_(incoming_post_ids))
+        .all()
+    }
+    user_inserted_in_run = set()  # Track user_ids inserted in this run
+    incoming_user_ids = {post["user_id"] for post in posts}
+    existing_user_ids = {
+        user.user_id
+        for user in db_session.query(User.user_id)
+        .filter(User.user_id.in_(incoming_user_ids))
         .all()
     }
     for post in posts:
@@ -38,9 +47,18 @@ def store_posts(posts, db_session):
                 sentiment_score=None,
                 llm_processed=False,
                 is_valid=None,
+                is_historical=historical
             )
             inserted_in_run.add(post["post_id"])
             db_session.add(new_post)
+            if post["user_id"] not in existing_user_ids and post["user_id"] not in user_inserted_in_run:
+                new_user = User(
+                    user_id=post["user_id"],
+                    username=post["username"],
+                    first_seen=post["timestamp"],
+                )
+                user_inserted_in_run.add(post["user_id"])
+                db_session.add(new_user)
         else:
             existing_post = (
                 db_session.query(Post).filter_by(post_id=post["post_id"]).first()

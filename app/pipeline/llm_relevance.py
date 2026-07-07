@@ -18,36 +18,42 @@ def get_posts_from_db(db_session, batch_size=200):
 
 
 # send 50 posts to the gemini model for classification at a time
-def get_relevance(posts, batch_size=50):
+def get_relevance(posts, batch_size=50, historical=False):
     results = []
     for i in range(0, len(posts), batch_size):
         batch = posts[i : i + batch_size]
         post_texts = [post.text for post in batch]
-        response = classify_relevance_with_gemini(post_texts)
+        response = classify_relevance_with_gemini(post_texts, historical=historical)
         results.extend(response.results)
     return results
 
 
-def update_db(posts, classifications, db_session):
-    for post, is_relevant in zip(posts, classifications):
-        post.is_related = is_relevant
+def update_db(posts, classifications, db_session, historical=False):
+    if historical:
+        for post, result in zip(posts, classifications):
+            post.is_related = result.is_relevant
+            if historical and result.is_relevant:
+                post.tickers = [result.ticker]
     db_session.commit()
 
 
-def run_relevance_pipeline(db_session, limit=None):
+def run_relevance_pipeline(db_session, limit=None, posts=None, historical=False):
+    limit = len(posts) if posts else limit
     while True:
-        posts = get_posts_from_db(
-            db_session, batch_size=min(200, limit) if limit else 200
-        )
+        if posts is None:
+            posts = get_posts_from_db(
+                db_session, batch_size=min(200, limit) if limit else 200
+            )
         if not posts:
             print("No more unprocessed posts found. Exiting.")
             break
-        classifications = get_relevance(posts)
-        update_db(posts, classifications, db_session)
+        classifications = get_relevance(posts, historical=historical)
+        update_db(posts, classifications, db_session, historical=historical)
         if limit:
             limit -= len(posts)
             if limit <= 0:
                 break  # Exit after processing the specified limit of posts
+        posts = None  # Reset posts to None to fetch the next batch in the next iteration
 
 
 def get_args():
