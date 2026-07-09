@@ -1,7 +1,6 @@
 # Verifies the picks made by users in the database to prepare for the User_Credibility pipeline.
 # This is done by running the posts through the LLM to check for relevance and sentiment, and then updating the database with the results.
 
-from app.database import get_db
 from app.models.post import Post
 from app.models.user import User
 from datetime import datetime, timedelta
@@ -9,6 +8,7 @@ from app.pipeline.scrape_posts import scrape_posts_for_user
 from app.pipeline.store_posts import store_posts
 from app.pipeline.llm_relevance import run_relevance_pipeline
 from app.pipeline.llm_sentiment import run_sentiment_pipeline
+from app.services.yfinance import get_stock_data
 
 
 def get_posts_from_db(
@@ -104,11 +104,47 @@ def update_user_last_historical_post(user, db_session, last_historical_post):
     db_session.commit()
 
 
-def verify_picks(posts, db_session):
+def verify_picks(posts):
     # Placeholder for the logic to verify picks
     for post in posts:
         pass  # Implement the logic to verify picks based on relevance and sentiment
-    pass
+        yf_data = {}
+        post_percent_change_total = 0
+        for ticker in post.tickers:
+            yf_data[ticker] = get_stock_data(ticker, post.timestamp)
+            day_0 = yf_data[ticker].get("day_0") if yf_data[ticker] else None
+            day_30 = yf_data[ticker].get("day_30") if yf_data[ticker] else None
+            day_60 = yf_data[ticker].get("day_60") if yf_data[ticker] else None
+            day_90 = yf_data[ticker].get("day_90") if yf_data[ticker] else None
+            if day_0 is not None and day_30 is not None and day_60 is not None and day_90 is not None:
+                percent_change_30 = ((day_30 - day_0) / day_0) * 100
+                percent_change_60 = ((day_60 - day_0) / day_0) * 100
+                percent_change_90 = ((day_90 - day_0) / day_0) * 100
+                avg_percent_change = (percent_change_30 + percent_change_60 + percent_change_90) / 3
+            elif day_0 is not None and day_30 is not None and day_60 is not None:
+                percent_change_30 = ((day_30 - day_0) / day_0) * 100
+                percent_change_60 = ((day_60 - day_0) / day_0) * 100
+                avg_percent_change = (percent_change_30 + percent_change_60) / 2
+            elif day_0 is not None and day_30 is not None:
+                percent_change_30 = ((day_30 - day_0) / day_0) * 100
+                avg_percent_change = percent_change_30
+            else:
+                avg_percent_change = None
+            post_percent_change_total += avg_percent_change if avg_percent_change is not None else 0
+        post_percent_change_avg = post_percent_change_total / len(post.tickers) if post.tickers else None
+        if post_percent_change_avg is None:
+            post.pick_correct = False
+            continue
+        if post.sentiment == "bullish":
+            post.pick_correct = post_percent_change_avg > 3.0
+        elif post.sentiment == "bearish":
+            post.pick_correct = post_percent_change_avg < -3.0
+        else: #neutral
+            post.pick_correct = post_percent_change_avg < 3.0 and post_percent_change_avg > -1.0
+    return posts
+
+
+            
 
 
 def run_ai_verification(user_id, db_session):
@@ -121,12 +157,12 @@ def run_ai_verification(user_id, db_session):
 
 def run_verify_picks_pipeline(user_id, db_session, limit=None):
     user = get_user_from_db(db_session, user_id)
+    if user is None:
+        raise ValueError(f"No user found for user_id {user_id} — expected an existing user from a valid post")
     if user:
         last_historical_post = user.last_historical_post
     else:
         last_historical_post = None
-    if user is None:
-        raise ValueError(f"No user found for user_id {user_id} — expected an existing user from a valid post")
     print(f"Scraping historical posts for user {user_id} since {last_historical_post}")
     start_time = datetime.now()
 
@@ -173,7 +209,7 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None):
     start_time = datetime.now()
     print(f"Verifying picks for user {user_id}")
 
-    posts = verify_picks(posts, db_session)
+    posts = verify_picks(posts)
 
     end_time = datetime.now()
     print(f"Verifying picks completed in {end_time - start_time}")
@@ -196,6 +232,12 @@ def get_args():
         default=None,
         help="Limit the number of posts to process.",
     )
+    parser.add_argument(
+        "--user_id",
+        type=int,
+        required=True,
+        help="The user_id to process.",
+    )
     return parser.parse_args()
 
 
@@ -204,6 +246,18 @@ def main():
 
     start_time = datetime.now(timezone.utc)
     # Placeholder for the main logic to run the verify picks pipeline
+    args = get_args()
+    user_id = args.user_id
+    try:
+        from app.database import get_db
+        db_session = next(get_db())
+        run_verify_picks_pipeline(user_id, db_session, limit=args.limit)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        db_session.rollback()
+    finally:
+        db_session.close()
+
     end_time = datetime.now(timezone.utc)
     print(f"Total time taken: {end_time - start_time}")
 
