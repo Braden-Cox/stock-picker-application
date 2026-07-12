@@ -14,3 +14,15 @@ def getXAPI_scrape_posts(query, cursor=None):
         headers={"Authorization": "Bearer " + getXAPI_key},
     )
     return response.json()
+
+
+def getXAPI_get_username_by_id(user_id):
+    response = requests.get(
+        "https://api.getxapi.com/twitter/user/info_by_id",
+        params={"userId": user_id},
+        headers={"Authorization": "Bearer " + getXAPI_key},
+    )
+    data = response.json()
+    if "data" not in data or "userName" not in data["data"]:
+        raise ValueError(f"Could not resolve username for user_id {user_id}: {data}")
+    return data["data"]["userName"]

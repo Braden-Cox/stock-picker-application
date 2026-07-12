@@ -32,7 +32,7 @@ def store_posts(posts, db_session, historical=False):
         ):
             new_post = Post(
                 post_id=post["post_id"],
-                tickers=post["tickers"],
+                tickers=post.get("tickers", []),
                 username=post["username"],
                 user_id=post["user_id"],
                 text=post["text"],
@@ -47,11 +47,14 @@ def store_posts(posts, db_session, historical=False):
                 sentiment_score=None,
                 llm_processed=False,
                 is_valid=None,
-                is_historical=historical
+                is_historical=historical,
             )
             inserted_in_run.add(post["post_id"])
             db_session.add(new_post)
-            if post["user_id"] not in existing_user_ids and post["user_id"] not in user_inserted_in_run:
+            if (
+                post["user_id"] not in existing_user_ids
+                and post["user_id"] not in user_inserted_in_run
+            ):
                 new_user = User(
                     user_id=post["user_id"],
                     username=post["username"],
@@ -63,7 +66,7 @@ def store_posts(posts, db_session, historical=False):
             existing_post = (
                 db_session.query(Post).filter_by(post_id=post["post_id"]).first()
             )
-            for ticker in post["tickers"]:
+            for ticker in post.get("tickers", []):
                 if ticker not in existing_post.tickers:
                     existing_post.tickers = existing_post.tickers + [ticker]
         db_session.flush()

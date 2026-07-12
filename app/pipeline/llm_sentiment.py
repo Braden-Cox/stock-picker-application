@@ -28,7 +28,7 @@ def get_sentiment(posts, batch_size=25, historical=False):
     for i in range(0, len(posts), batch_size):
         batch = posts[i : i + batch_size]
         post_texts = [post.text for post in batch]
-        response = classify_sentiment_with_haiku(post_texts, historical=historical)
+        response = classify_sentiment_with_haiku(post_texts)
         results.extend(response.results)
     return results
 
@@ -49,7 +49,9 @@ def run_sentiment_pipeline(db_session, limit=None, posts=None, historical=False)
             limit -= len(posts)
             if limit <= 0:
                 break  # Exit after processing the specified limit of posts
-        posts = None  # Reset posts to None to fetch the next batch in the next iteration
+        posts = (
+            None  # Reset posts to None to fetch the next batch in the next iteration
+        )
 
 
 def get_args():

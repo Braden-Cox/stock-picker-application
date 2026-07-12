@@ -33,9 +33,30 @@ def store_tickers(tickers, db_session):
 def main():
     from app.pipeline.clean_tickers import clean_tickers
     from app.pipeline.fetch_tickers import fetch_tickers
+    import os
+    import argparse
 
+    argument_parser = argparse.ArgumentParser(
+        description="Store tickers in the database."
+    )
+    argument_parser.add_argument(
+        "--tickers_list",
+        type=str,
+        default=None,
+        help="A JSON file in the data folder containing a list of tickers to store in the database.",
+    )
+    args = argument_parser.parse_args()
     db_session = next(get_db())
-    tickers = clean_tickers(fetch_tickers())
+    if args.tickers_list:
+        import json
+
+        BASE_DIR = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        with open(os.path.join(BASE_DIR, "data", args.tickers_list)) as f:
+            tickers = json.load(f)
+    else:
+        tickers = clean_tickers(fetch_tickers())
     try:
         store_tickers(tickers, db_session)
         print(f"Stored {len(tickers)} tickers in the ticker database.")

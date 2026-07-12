@@ -2,9 +2,19 @@ from datetime import datetime, timedelta, timezone
 import os
 import json
 from app.services.getx import getXAPI_scrape_posts
+from app.services.getx import getXAPI_get_username_by_id
 
 
-def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="en", user_id=None, date_start=None, date_end=None):
+def scrape_posts(
+    tickers,
+    all=False,
+    limit_tickers=2,
+    limit_calls=2,
+    language="en",
+    user_id=None,
+    date_start=None,
+    date_end=None,
+):
     posts = []
     has_more = True
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime(
@@ -76,9 +86,20 @@ def scrape_posts(tickers, all=False, limit_tickers=2, limit_calls=2, language="e
     print(f"Total time taken: {end_time - start_time}")
     return posts
 
-def scrape_posts_for_user(all=False, limit_calls=2, language="en", user_id=None, date_start=None, date_end=None):
-    query = f"from:{user_id} since:{date_start} until:{date_end} {lang(language)}".strip()
-    print(f"Scraping posts for user: {user_id}")
+
+def scrape_posts_for_user(
+    all=False,
+    limit_calls=2,
+    language="en",
+    user_id=None,
+    date_start=None,
+    date_end=None,
+):
+    username = getXAPI_get_username_by_id(user_id)
+    query = (
+        f"from:{username} since:{date_start} until:{date_end} {lang(language)}".strip()
+    )
+    print(f"Scraping posts for user: {username}")
     cursor = None
     posts = []
     call_count = 0

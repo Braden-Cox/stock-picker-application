@@ -9,10 +9,16 @@ from app.pipeline.store_posts import store_posts
 from app.pipeline.llm_relevance import run_relevance_pipeline
 from app.pipeline.llm_sentiment import run_sentiment_pipeline
 from app.services.yfinance import get_stock_data
+from sqlalchemy import func
 
 
 def get_posts_from_db(
-    user_id, db_session, batch_size=10, historical=False, thirty_days_ago=None, llm_processed=False
+    user_id,
+    db_session,
+    batch_size=10,
+    historical=False,
+    thirty_days_ago=None,
+    llm_processed=False,
 ):
     return (
         db_session.query(Post)
@@ -21,12 +27,10 @@ def get_posts_from_db(
             Post.is_valid == True,
             Post.pick_verified == False,
             Post.is_historical == historical,
-            (
-                Post.timestamp < thirty_days_ago
-                if historical and thirty_days_ago
-                else True
-            ),
+            (Post.timestamp < thirty_days_ago if thirty_days_ago else True),
             Post.llm_processed == llm_processed,
+            func.array_length(Post.tickers, 1) > 0,
+            Post.tickers[1].isnot(None),
         )
         .order_by(Post.post_id)
         .limit(batch_size)
@@ -55,13 +59,17 @@ def scrape_historical_posts_for_user(user_id, last_historical_post=None):
         else two_years_ago
     ).strftime("%Y-%m-%d")
     # Call the scrape_posts function with appropriate parameters to get past posts for the user
-    historical_posts = scrape_posts_for_user(
-        all=True,
-        limit_calls=5,
-        user_id=user_id,
-        date_start=date_start,
-        date_end=date_end,
-    )
+    try:
+        historical_posts = scrape_posts_for_user(
+            all=True,
+            limit_calls=5,
+            user_id=user_id,
+            date_start=date_start,
+            date_end=date_end,
+        )
+    except Exception as e:
+        print(f"Skipping user {user_id}, could not scrape historical posts: {e}")
+        return [], thirty_days_ago
     return historical_posts, thirty_days_ago
 
 
@@ -111,16 +119,27 @@ def verify_picks(posts):
         yf_data = {}
         post_percent_change_total = 0
         for ticker in post.tickers:
-            yf_data[ticker] = get_stock_data(ticker, post.timestamp)
+            try:
+                yf_data[ticker] = get_stock_data(ticker, post.timestamp)
+            except Exception as e:
+                print(f"Error fetching stock data for ticker {ticker}: {e}")
+                yf_data[ticker] = None
             day_0 = yf_data[ticker].get("day_0") if yf_data[ticker] else None
             day_30 = yf_data[ticker].get("day_30") if yf_data[ticker] else None
             day_60 = yf_data[ticker].get("day_60") if yf_data[ticker] else None
             day_90 = yf_data[ticker].get("day_90") if yf_data[ticker] else None
-            if day_0 is not None and day_30 is not None and day_60 is not None and day_90 is not None:
+            if (
+                day_0 is not None
+                and day_30 is not None
+                and day_60 is not None
+                and day_90 is not None
+            ):
                 percent_change_30 = ((day_30 - day_0) / day_0) * 100
                 percent_change_60 = ((day_60 - day_0) / day_0) * 100
                 percent_change_90 = ((day_90 - day_0) / day_0) * 100
-                avg_percent_change = (percent_change_30 + percent_change_60 + percent_change_90) / 3
+                avg_percent_change = (
+                    percent_change_30 + percent_change_60 + percent_change_90
+                ) / 3
             elif day_0 is not None and day_30 is not None and day_60 is not None:
                 percent_change_30 = ((day_30 - day_0) / day_0) * 100
                 percent_change_60 = ((day_60 - day_0) / day_0) * 100
@@ -130,8 +149,12 @@ def verify_picks(posts):
                 avg_percent_change = percent_change_30
             else:
                 avg_percent_change = None
-            post_percent_change_total += avg_percent_change if avg_percent_change is not None else 0
-        post_percent_change_avg = post_percent_change_total / len(post.tickers) if post.tickers else None
+            post_percent_change_total += (
+                avg_percent_change if avg_percent_change is not None else 0
+            )
+        post_percent_change_avg = (
+            post_percent_change_total / len(post.tickers) if post.tickers else None
+        )
         if post_percent_change_avg is None:
             post.pick_correct = False
             continue
@@ -139,26 +162,28 @@ def verify_picks(posts):
             post.pick_correct = post_percent_change_avg > 3.0
         elif post.sentiment == "bearish":
             post.pick_correct = post_percent_change_avg < -3.0
-        else: #neutral
-            post.pick_correct = post_percent_change_avg < 3.0 and post_percent_change_avg > -1.0
+        else:  # neutral
+            post.pick_correct = (
+                post_percent_change_avg < 3.0 and post_percent_change_avg > -1.0
+            )
     return posts
-
-
-            
 
 
 def run_ai_verification(user_id, db_session):
     # Placeholder for the logic to run AI verification on posts
-    
+
     posts = get_unprocessed_historical_posts(user_id, db_session, stage="relevance")
     llm_relevance_historical_check(db_session, posts)
     posts = get_unprocessed_historical_posts(user_id, db_session, stage="sentiment")
     llm_sentiment_historical_check(db_session, posts)
 
+
 def run_verify_picks_pipeline(user_id, db_session, limit=None):
     user = get_user_from_db(db_session, user_id)
     if user is None:
-        raise ValueError(f"No user found for user_id {user_id} — expected an existing user from a valid post")
+        raise ValueError(
+            f"No user found for user_id {user_id} — expected an existing user from a valid post"
+        )
     if user:
         last_historical_post = user.last_historical_post
     else:
@@ -166,7 +191,9 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None):
     print(f"Scraping historical posts for user {user_id} since {last_historical_post}")
     start_time = datetime.now()
 
-    historical_posts, thirty_days_ago = scrape_historical_posts_for_user(user_id, last_historical_post)
+    historical_posts, thirty_days_ago = scrape_historical_posts_for_user(
+        user_id, last_historical_post
+    )
     end_time = datetime.now()
 
     print(f"Scraping historical posts completed in {end_time - start_time}")
@@ -178,7 +205,9 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None):
     end_time = datetime.now()
     print(f"Storing historical posts completed in {end_time - start_time}")
 
-    update_user_last_historical_post(user, db_session, last_historical_post=thirty_days_ago)
+    update_user_last_historical_post(
+        user, db_session, last_historical_post=thirty_days_ago
+    )
 
     run_ai_verification(user_id, db_session)
 
@@ -191,7 +220,7 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None):
         **({"batch_size": limit} if limit else {}),
         historical=True,
         thirty_days_ago=thirty_days_ago,
-        llm_processed=True
+        llm_processed=True,
     )
     posts.extend(
         get_posts_from_db(
@@ -200,7 +229,7 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None):
             **({"batch_size": limit} if limit else {}),
             historical=False,
             thirty_days_ago=thirty_days_ago,
-            llm_processed=True
+            llm_processed=True,
         )
     )
 
@@ -222,6 +251,25 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None):
     print(f"Updating posts in the database completed in {end_time - start_time}")
 
 
+def get_users_with_pending_posts(db_session):
+    thirty_one_days_ago = datetime.now() - timedelta(days=31)
+    return (
+        db_session.query(Post.user_id)
+        .join(User, User.user_id == Post.user_id)
+        .filter(
+            Post.is_valid == True,
+            Post.pick_verified == False,
+            Post.is_historical == False,
+            (
+                (User.last_historical_post == None)
+                | (User.last_historical_post < thirty_one_days_ago)
+            ),
+        )
+        .distinct()
+        .all()
+    )
+
+
 def get_args():
     import argparse
 
@@ -234,9 +282,13 @@ def get_args():
     )
     parser.add_argument(
         "--user_id",
-        type=int,
-        required=True,
+        type=str,
         help="The user_id to process.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Process all users.",
     )
     return parser.parse_args()
 
@@ -247,16 +299,41 @@ def main():
     start_time = datetime.now(timezone.utc)
     # Placeholder for the main logic to run the verify picks pipeline
     args = get_args()
-    user_id = args.user_id
-    try:
+
+    if args.user_id is None and args.all is False:
+        print(
+            "Please provide a user_id to process or use the --all flag to process all users."
+        )
+        return
+    elif args.user_id is None and args.all is True:
         from app.database import get_db
+
         db_session = next(get_db())
-        run_verify_picks_pipeline(user_id, db_session, limit=args.limit)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        db_session.rollback()
-    finally:
+        users = get_users_with_pending_posts(db_session)
+        if len(users) == 0:
+            print("No users with pending posts found.")
+        else:
+            print(f"Found {len(users)} users with pending posts.")
+            for user in users:
+                try:
+                    run_verify_picks_pipeline(user[0], db_session, limit=args.limit)
+                except Exception as e:
+                    print(f"An error occurred while processing user {user[0]}: {e}")
+                    db_session.rollback()
         db_session.close()
+    else:
+        user_id = args.user_id
+        try:
+            from app.database import get_db
+
+            db_session = next(get_db())
+            run_verify_picks_pipeline(user_id, db_session, limit=args.limit)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            print(f"Rolling back the session")
+            db_session.rollback()
+        finally:
+            db_session.close()
 
     end_time = datetime.now(timezone.utc)
     print(f"Total time taken: {end_time - start_time}")
