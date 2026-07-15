@@ -2,6 +2,7 @@ from app.database import get_db
 from app.services.gemini import classify_relevance_with_gemini
 from app.models.post import Post
 from datetime import datetime
+from app.models.user import User
 
 # query postgresql database for posts
 
@@ -10,7 +11,8 @@ from datetime import datetime
 def get_posts_from_db(db_session, batch_size=200):
     return (
         db_session.query(Post)
-        .filter(Post.is_related == None, Post.llm_processed == False)
+        .join(User, User.user_id == Post.user_id)
+        .filter(Post.is_related == None, Post.llm_processed == False, User.list_status != "blacklist")
         .order_by(Post.post_id)
         .limit(batch_size)
         .all()
