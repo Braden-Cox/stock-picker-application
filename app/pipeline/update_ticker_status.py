@@ -20,6 +20,7 @@ def update_ticker_status(db_session, min_posts=500, relevance_threshold=0.01):
         total_scraped = len(posts)
 
         if total_scraped < min_posts:
+            ticker.total_posts_scraped = total_scraped
             continue  # not enough data yet to trust the ratio
 
         relevant_posts = sum(1 for post in posts if post.is_related)
