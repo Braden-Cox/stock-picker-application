@@ -20,7 +20,7 @@ def build_pool_of_picks(ranked_posts, previous_top_picks):
             {
                 "post_id": tp.post_id,
                 "user_id": tp.user_id,
-                "tickers": [tp.ticker] if tp.ticker else None,
+                "tickers": tp.tickers if tp.tickers else None,
                 "score": tp.score,
                 "sentiment": tp.sentiment,
                 "existing_top_pick": tp,

@@ -13,13 +13,12 @@ def get_stock_data(ticker, start_date):
     close_prices = data["Close"]
     if hasattr(close_prices, "columns"):
         close_prices = close_prices[ticker]
-
-    else:
-        prices = {}
-        labels = ["day_0", "day_30", "day_60", "day_90"]
-        for i, label in enumerate(labels):
-            if i < len(close_prices):
-                prices[label] = float(close_prices.iloc[i])
-            else:
-                prices[label] = None
-        return prices
+        
+    prices = {}
+    labels = ["day_0", "day_30", "day_60", "day_90"]
+    for i, label in enumerate(labels):
+        if i < len(close_prices):
+            prices[label] = float(close_prices.iloc[i])
+        else:
+            prices[label] = None
+    return prices

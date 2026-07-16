@@ -31,28 +31,26 @@ def classify_relevance_with_gemini(
 
     last_error = None
     for attempt in range(max_retries):
-        response = client.interactions.create(
-            model="gemini-2.5-flash-lite",
-            input=prompt,
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": RelevanceResponse.model_json_schema(),
-            },
-        )
-        output = response.output_text
-        if output is None:
-            raise ValueError("Gemini response output_text is None")
-        output = output.strip()
-        if output.startswith("```"):
-            output = output.split("\n", 1)[1]
-            output = output.rsplit("```", 1)[0]
-        time.sleep(0.1)
         try:
+            response = client.interactions.create(
+                model="gemini-2.5-flash-lite",
+                input=prompt,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": RelevanceResponse.model_json_schema(),
+                },
+            )
+            output = response.output_text
+            if output is None:
+                raise ValueError("Gemini response output_text is None")
+            output = output.strip()
+            if output.startswith("```"):
+                output = output.split("\n", 1)[1]
+                output = output.rsplit("```", 1)[0]
+            time.sleep(0.1)
             return RelevanceResponse.model_validate_json(output.strip())
         except Exception as e:
             last_error = e
-            print(
-                f"Gemini response failed to parse (attempt {attempt + 1}/{max_retries}): {e}"
-            )
+            print(f"Gemini response failed (attempt {attempt + 1}/{max_retries}): {e}")
     raise last_error
