@@ -23,10 +23,15 @@ def store_tickers(tickers, db_session):
         else:
             existing_ticker.company_name = ticker["company_name"]
             existing_ticker.exchange = ticker["exchange"]
-            existing_ticker.is_active = ticker["is_active"]
-            existing_ticker.flag_reason = ticker["flag_reason"]
             existing_ticker.needs_prefix = ticker["needs_prefix"]
             existing_ticker.last_updated = datetime.now(timezone.utc)
+
+            # is_active only ever moves toward False on update.
+            if existing_ticker.is_active:
+                if not ticker["is_active"]:
+                    existing_ticker.is_active = False
+                existing_ticker.flag_reason = ticker["flag_reason"]
+            # already inactive -> leave is_active and flag_reason alone
     db_session.commit()
 
 

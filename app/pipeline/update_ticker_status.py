@@ -18,15 +18,16 @@ def update_ticker_status(db_session, min_posts=500, relevance_threshold=0.01):
 
         posts = get_posts_for_ticker(db_session, ticker.ticker)
         total_scraped = len(posts)
-
-        if total_scraped < min_posts:
-            ticker.total_posts_scraped = total_scraped
-            continue  # not enough data yet to trust the ratio
-
-        relevant_posts = sum(1 for post in posts if post.is_related)
-        relevance_rate = relevant_posts / total_scraped
-
         ticker.total_posts_scraped = total_scraped
+        classified = [post for post in posts if post.is_related is not None]
+        total_classified = len(classified)
+
+        if total_classified < min_posts:
+            continue  # not enough classified data yet to trust the ratio
+
+        relevant_posts = sum(1 for post in classified if post.is_related)
+        relevance_rate = relevant_posts / total_classified
+
         ticker.relevant_posts = relevant_posts
         ticker.relevance_rate = relevance_rate
 
@@ -34,7 +35,8 @@ def update_ticker_status(db_session, min_posts=500, relevance_threshold=0.01):
             ticker.is_active = False
             ticker.flag_reason = "Ticker scrapes irrelevant posts too often"
             print(
-                f"Deactivated {ticker.ticker}: relevance_rate={relevance_rate:.2%} over {total_scraped} posts"
+                f"Deactivated {ticker.ticker}: relevance_rate={relevance_rate:.2%} "
+                f"over {total_classified} classified posts ({total_scraped} scraped)"
             )
 
     db_session.commit()
@@ -50,7 +52,7 @@ def get_args():
         "--min_posts",
         type=int,
         default=500,
-        help="Minimum number of posts required to evaluate a ticker.",
+        help="Minimum number of CLASSIFIED posts required to evaluate a ticker.",
     )
     parser.add_argument(
         "--relevance_threshold",

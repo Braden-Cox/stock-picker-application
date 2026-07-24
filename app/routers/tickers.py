@@ -14,7 +14,7 @@ class TickerResponse(BaseModel):
     is_active: bool
     flag_reason: Optional[str]
     relevance_rate: Optional[float]
-    total_posts_scraped: int
+    total_posts_scraped: Optional[int] = None
 
 
 router = APIRouter(prefix="/tickers", tags=["tickers"])

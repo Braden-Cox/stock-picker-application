@@ -10,7 +10,7 @@ from fastapi import HTTPException
 class UserCredibilityResponse(BaseModel):
     username: str
     hit_rate: Optional[float]
-    list_status: str
+    list_status: Optional[str] = None
     total_picks: Optional[int]
     correct_picks: Optional[int]
 

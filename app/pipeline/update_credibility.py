@@ -20,7 +20,7 @@ def get_users_with_pending_posts(db_session):
 def get_posts_for_user(db_session, user_id):
     return (
         db_session.query(Post)
-        .filter(Post.user_id == user_id, Post.pick_verified == True)
+        .filter(Post.user_id == user_id, Post.pick_verified == True, Post.pick_correct.isnot(None))
         .all()
     )
 

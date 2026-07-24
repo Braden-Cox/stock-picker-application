@@ -55,6 +55,8 @@ def rank_picks(db_session, post_id=None):
         hit_rate = user_hit_rates.get(post.user_id)
         if hit_rate is None:
             continue  # Skip posts for users without a hit rate
+        if sentiment_score is None:
+            continue  # Skip posts without a sentiment score
         post_score = sentiment_score * hit_rate * engagment_weight
         ranked_posts.append((post, post_score))
     ranked_posts.sort(key=lambda x: x[1], reverse=True)
