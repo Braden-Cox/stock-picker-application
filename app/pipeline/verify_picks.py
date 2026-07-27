@@ -25,7 +25,7 @@ NEUTRAL_LOWER = -1.0
 def get_posts_from_db(
     user_id,
     db_session,
-    batch_size=10,
+    batch_size=500,
     historical=False,
     thirty_days_ago=None,
     llm_processed=False,
@@ -284,23 +284,23 @@ def run_verify_picks_pipeline(user_id, db_session, limit=None, skip_scrape=False
     print(f"Updating posts in the database completed in {end_time - start_time}")
 
 
-def get_users_with_pending_posts(db_session):
+def get_users_with_pending_posts(db_session, ignore_cooldown=False):
     thirty_one_days_ago = datetime.now() - timedelta(days=31)
-    return (
+    query = (
         db_session.query(Post.user_id)
         .join(User, User.user_id == Post.user_id)
         .filter(
             Post.is_valid == True,
             Post.pick_verified == False,
             Post.is_historical == False,
-            (
-                (User.last_historical_post == None)
-                | (User.last_historical_post < thirty_one_days_ago)
-            ),
         )
-        .distinct()
-        .all()
     )
+    if not ignore_cooldown:
+        query = query.filter(
+            (User.last_historical_post == None)
+            | (User.last_historical_post < thirty_one_days_ago)
+        )
+    return query.distinct().all()
 
 
 def get_args():
@@ -328,6 +328,11 @@ def get_args():
         action="store_true",
         help="Skip scraping historical posts. Only re-score posts already in the database.",
     )
+    parser.add_argument(
+        "--ignore_cooldown",
+        action="store_true",
+        help="Ignore the user last historical post in getting users. re-runs for all users"
+    )
     return parser.parse_args()
 
 
@@ -346,7 +351,7 @@ def main():
         from app.database import get_db
  
         db_session = next(get_db())
-        users = get_users_with_pending_posts(db_session)
+        users = get_users_with_pending_posts(db_session, args.ignore_cooldown)
         if len(users) == 0:
             print("No users with pending posts found.")
         else:

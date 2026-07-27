@@ -31,4 +31,5 @@ postgres_data/
 # Python egg info
 *.egg-info/
 dist/
-build/
+build/backup_*.sql
+backup_*.sql
