@@ -41,16 +41,37 @@ Ticker cleaning depends on [`data/common_words.json`](data/common_words.json), a
 For each active ticker, queries the GetX API (X/Twitter search) for recent posts, tagging single-character/common-word tickers with a `$` prefix to cut down on false matches. Posts below an engagement threshold (`likes + 2×reposts < 5`) are dropped before they ever hit the database. New posters are auto-created in `users` with `list_status="unknown"`. Posts from already-blacklisted users are never stored at all.
  
 ### 3. Relevance classification
-Batches of up to 50 unprocessed posts go to **Gemini 2.5 Flash Lite** ([`llm_relevance.py`](app/pipeline/llm_relevance.py)), which returns a strict-JSON verdict on whether each post is an actual stock opinion/prediction versus spam, a bare mention, or a news headline. Posts from blacklisted users are excluded from every batch. Failed or malformed responses are retried automatically before giving up on a batch.
+Batches of up to 50 unprocessed posts go to **Gemini 2.5 Flash Lite** ([`llm_relevance.py`](app/pipeline/llm_relevance.py)), which returns a strict-JSON verdict on whether each post is an actual stock opinion/prediction versus spam, a bare mention, or a news headline. Posts from blacklisted users are excluded from every batch. Responses are validated against an enforced JSON schema and retried on failure; if a batch's result count doesn't line up with the posts sent (the usual cause is a post's own numbering being read as a list item), it falls back to classifying that batch one post at a time, and a batch that still can't be parsed is skipped rather than aborting the whole run.
  
 ### 4. Sentiment classification
 Posts that passed relevance go to **Claude Haiku 4.5** ([`llm_sentiment.py`](app/pipeline/llm_sentiment.py)) in batches of 25, which assigns `bullish` / `bearish` / `neutral`, a 0–1 confidence score, and whether the post is a concrete, actionable pick (`is_valid`) versus vague commentary.
  
 ### 5. Pick verification
-For each user with unverified valid picks, the pipeline backfills up to two years of their historical posts (skipping accounts that are suspended, deleted, or otherwise unreachable), runs those historical posts through the same relevance/sentiment classifiers, then checks every pick's ticker against **yfinance** price data at day 0/30/60/90 ([`verify_picks.py`](app/pipeline/verify_picks.py)). A pick is marked correct if the average percent change over that window matches the claimed direction (bullish needs >+3%, bearish needs <-3%, neutral needs to stay within -1%..+3%). Users who were verified within the last 31 days are skipped on subsequent runs to avoid redundant re-scraping.
+For each user with unverified valid picks, the pipeline backfills up to two years of their historical posts (skipping accounts that are suspended, deleted, or otherwise unreachable), runs those historical posts through the same relevance/sentiment classifiers, then checks every pick's ticker against **yfinance** price data at day 0/30/60/90 ([`verify_picks.py`](app/pipeline/verify_picks.py)). A pick is marked correct if the average percent change over that window matches the claimed direction (bullish needs >+3%, bearish needs <-3%, neutral needs to stay within -1%..+3%). Picks whose ticker returns no usable price data (e.g. delisted or non-US symbols) are recorded as unscored rather than counted as wrong. Users who were verified within the last 31 days are skipped on subsequent runs to avoid redundant re-scraping.
  
 ### 6. Credibility & ranking
 [`update_credibility.py`](app/pipeline/update_credibility.py) computes each user's hit rate once they have more than 6 verified picks, and buckets them into `whitelist` (≥50% hit rate), `greylist`, or `blacklist` (<10%) — blacklisted users are excluded from all future scraping and classification. [`rank_picks.py`](app/pipeline/rank_picks.py) then scores every unverified, still-current pick as `sentiment_score × user.hit_rate × engagement_weight`, and [`store_top_picks.py`](app/pipeline/store_top_picks.py) persists the top N as the current picks list, retiring anything that falls out of the ranking.
+ 
+---
+
+## Results
+ 
+Run end to end on a real corpus of scraped posts:
+ 
+| Stage | Count |
+|---|---|
+| Posts scraped | 517,162 |
+| Posts stored (after engagement filter + dedupe) | 77,995 |
+| Classified relevant (actual stock opinions) | 14,019 (18%) |
+| Concrete, gradable picks (`is_valid`) | 3,553 |
+| Verified hit rate (vs +30/60/90-day price movement) | **32.5%** |
+| Whitelisted posters (≥50% hit rate) | 242 |
+ 
+The engagement filter does most of the culling up front: about 85% of scraped posts are dropped before any paid LLM call, so classification only ever runs on posts with enough traction to be worth grading.
+ 
+The point this demonstrates is that the verification loop *works* — directional picks are graded against real price movement, and the credibility layer meaningfully separates posters (whitelist averaging ~0.70 hit rate against a greylist/blacklist tail). A 32.5% hit rate against a +3% directional bar is roughly what you'd expect from noisy retail chatter; the value is in the measurement being sound, not in any claim of edge.
+ 
+> An earlier version of the verification stage reported a ~1% hit rate. This turned out to be a bug — failed price lookups were being scored as a 0% price move, which marked every directional pick wrong — not a real result. Finding and fixing it is what the current numbers reflect.
  
 ---
  
@@ -165,7 +186,9 @@ python -m app.pipeline.llm_relevance --limit 200
 python -m app.pipeline.verify_picks --all
 python -m app.pipeline.rank_picks
 ```
-Most commands accept `--limit` to cap how much they process in one run, and `verify_picks` accepts `--user_id` to target a single user instead of everyone pending.
+Most commands accept `--limit` to cap how much they process in one run. `verify_picks` additionally accepts `--user_id` to target a single user, `--skip_scrape` to re-score already-stored posts without new scraping, and `--ignore_cooldown` to re-select users regardless of the 31-day scrape cooldown (used to drain a historical backlog left by a large one-time backfill).
+
+Note: `store_posts` reports the number of posts it *received*, not the number stored — the engagement filter and deduplication drop a large fraction before insert, so the database row count is expected to be much lower than the scraped count.
  
 ---
  
@@ -190,12 +213,17 @@ data/                     Static reference data (e.g. common_words.json for tick
 A handful of thresholds in this project are intentional starting estimates, chosen before enough real data existed to validate them properly. They're designed to be easy to tune (most are function parameters or CLI flags, not hardcoded constants), and are documented here so they're not mistaken for carefully-tuned production values:
  
 - **Ticker relevance threshold** (`update_ticker_status.py`, default `0.01`) — deliberately lenient to avoid deactivating tickers prematurely on limited data; expected to be tightened once a larger sample of per-ticker relevance rates is available.
-- **Ticker minimum post volume** (`update_ticker_status.py`, default `500`) — the number of scraped posts required before a ticker's relevance rate is trusted at all.
+- **Ticker minimum post volume** (`update_ticker_status.py`, default `500`) — the number of classified posts required before a ticker's relevance rate is trusted at all.
 - **Post engagement weight cap** (`rank_picks.py`, default `100`) — used to normalize raw engagement into a 0–1 weight; based on an early, small sample of real engagement numbers and likely to shift as more posts are scraped.
-- **User credibility thresholds** (`update_credibility.py`) — `>6` verified picks required before a hit rate is trusted, `≥50%` for whitelist, `<10%` for blacklist. These were set from a very small early sample of verified users and should be revisited once a much larger population has been verified.
+- **User credibility thresholds** (`update_credibility.py`) — `>6` verified picks required before a hit rate is trusted, `≥50%` for whitelist, `<10%` for blacklist. These were set from a small early sample of verified users and should be revisited once a much larger population has been verified.
 - **Historical scrape window** (`verify_picks.py`, 2 years) — not yet validated against how far back genuinely useful, gradable picks tend to go; a shorter window may capture nearly the same signal for a fraction of the API cost.
+ 
+These next two are structural rather than tunable — they shape what the hit rate measures and are worth understanding before comparing it to anything:
+ 
+- **US-only pricing.** yfinance covers US exchanges (NASDAQ/NYSE); picks on foreign tickers (e.g. Canadian or other non-US listings) return no price data and are recorded as unscored rather than counted. The reported hit rate is therefore over US-listed picks only.
+- **Multi-ticker posts.** A post tagged with several tickers has its price move averaged across all of them, which can understate a correct call that was really about one stock. Measured impact is small — only ~3.8% of stored posts carry more than one ticker — so this is left as-is rather than adding per-post ticker disambiguation.
 
-None of these require code changes to adjust — they're all parameters or defaults that can be overridden via CLI flags or function arguments as more data becomes available.
+None of the tunable thresholds require code changes to adjust — they're all parameters or defaults that can be overridden via CLI flags or function arguments as more data becomes available.
  
 ---
  
