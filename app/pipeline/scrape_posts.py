@@ -23,65 +23,68 @@ def scrape_posts(
     start_time = datetime.now(timezone.utc)
     i = limit_tickers
     j = 0
-    for ticker in tickers:
-        if j < i:
-            if not ticker["is_active"]:
-                print(f"Skipping inactive ticker: {ticker['ticker']}")
-                continue
-            if user_id != None:
-                query = f"from:{user_id} {ticker['ticker']} since:{date_start} until:{date_end} {lang(language)}".strip()
-            elif ticker["needs_prefix"]:
-                query = f"${ticker['ticker']} since:{seven_days_ago} {lang(language)}".strip()
+    try:
+        for ticker in tickers:
+            if j < i:
+                if not ticker["is_active"]:
+                    print(f"Skipping inactive ticker: {ticker['ticker']}")
+                    continue
+                if user_id != None:
+                    query = f"from:{user_id} {ticker['ticker']} since:{date_start} until:{date_end} {lang(language)}".strip()
+                elif ticker["needs_prefix"]:
+                    query = f"${ticker['ticker']} since:{seven_days_ago} {lang(language)}".strip()
+                else:
+                    query = f"{ticker['ticker']} since:{seven_days_ago} {lang(language)}".strip()
+                print(f"Scraping posts for ticker: {ticker['ticker']}")
+                cursor = None
+                call_count = 0
+                scrape_start_time = datetime.now(timezone.utc)
+                while call_count < limit_calls:
+                    try:
+                        data = getXAPI_scrape_posts(query, cursor)
+                        call_count += 1
+                        has_more = data["has_more"]
+                        next_cursor = data["next_cursor"]
+                        cursor = next_cursor
+                        for tweet in data["tweets"]:
+                            post = {
+                                "post_id": tweet["id"],
+                                "text": tweet["text"],
+                                "username": tweet["author"]["userName"],
+                                "user_id": tweet["author"]["id"],
+                                "timestamp": tweet["createdAt"],
+                                "like_count": tweet["likeCount"],
+                                "repost_count": tweet["retweetCount"],
+                                "time_scraped_at": datetime.now(timezone.utc).isoformat(),
+                                "tickers": [ticker["ticker"]],
+                                "url": tweet["url"],
+                            }
+                            posts.append(post)
+                        if all == False:
+                            scrape_end_time = datetime.now(timezone.utc)
+                            print(
+                                f"Finished scraping posts for ticker: {ticker['ticker']} in {scrape_end_time - scrape_start_time}"
+                            )
+                            break
+                        if has_more == False:
+                            scrape_end_time = datetime.now(timezone.utc)
+                            print(
+                                f"Finished scraping posts for ticker: {ticker['ticker']} in {scrape_end_time - scrape_start_time}"
+                            )
+                            break
+                    except Exception as e:
+                        print(f"Error scraping posts for ticker {ticker['ticker']}: {e}")
+                        scrape_end_time = datetime.now(timezone.utc)
+                        print(
+                            f"Finished scraping posts for ticker: {ticker['ticker']} in {scrape_end_time - scrape_start_time}"
+                        )
+                        break
             else:
-                query = f"{ticker['ticker']} since:{seven_days_ago} {lang(language)}".strip()
-            print(f"Scraping posts for ticker: {ticker['ticker']}")
-            cursor = None
-            call_count = 0
-            scrape_start_time = datetime.now(timezone.utc)
-            while call_count < limit_calls:
-                try:
-                    data = getXAPI_scrape_posts(query, cursor)
-                    call_count += 1
-                    has_more = data["has_more"]
-                    next_cursor = data["next_cursor"]
-                    cursor = next_cursor
-                    for tweet in data["tweets"]:
-                        post = {
-                            "post_id": tweet["id"],
-                            "text": tweet["text"],
-                            "username": tweet["author"]["userName"],
-                            "user_id": tweet["author"]["id"],
-                            "timestamp": tweet["createdAt"],
-                            "like_count": tweet["likeCount"],
-                            "repost_count": tweet["retweetCount"],
-                            "time_scraped_at": datetime.now(timezone.utc).isoformat(),
-                            "tickers": [ticker["ticker"]],
-                            "url": tweet["url"],
-                        }
-                        posts.append(post)
-                    if all == False:
-                        scrape_end_time = datetime.now(timezone.utc)
-                        print(
-                            f"Finished scraping posts for ticker: {ticker['ticker']} in {scrape_end_time - scrape_start_time}"
-                        )
-                        break
-                    if has_more == False:
-                        scrape_end_time = datetime.now(timezone.utc)
-                        print(
-                            f"Finished scraping posts for ticker: {ticker['ticker']} in {scrape_end_time - scrape_start_time}"
-                        )
-                        break
-                except Exception as e:
-                    print(f"Error scraping posts for ticker {ticker['ticker']}: {e}")
-                    scrape_end_time = datetime.now(timezone.utc)
-                    print(
-                        f"Finished scraping posts for ticker: {ticker['ticker']} in {scrape_end_time - scrape_start_time}"
-                    )
-                    break
-        else:
-            print(f"Reached limit of {i} tickers scraped. Stopping.")
-            break
-        j += 1
+                print(f"Reached limit of {i} tickers scraped. Stopping.")
+                break
+            j += 1
+    except Exception as e:
+        print(f"Error scraping posts: {e}")
     end_time = datetime.now(timezone.utc)
     print(f"Total time taken: {end_time - start_time}")
     return posts
