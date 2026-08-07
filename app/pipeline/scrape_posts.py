@@ -83,6 +83,7 @@ def scrape_posts(
                 print(f"Reached limit of {i} tickers scraped. Stopping.")
                 break
             j += 1
+            save_checkpoint(posts)
     except Exception as e:
         print(f"Error scraping posts: {e}")
     end_time = datetime.now(timezone.utc)
@@ -150,6 +151,19 @@ def scrape_posts_for_user(
     scrape_end_time = datetime.now(timezone.utc)
     print(f"Total time taken: {scrape_end_time - scrape_start_time}")
     return posts
+
+
+def save_checkpoint(posts, path=None):
+    if path is None:
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "data",
+            "posts_checkpoint.json",
+        )
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(posts, f, indent=4)
+    os.replace(tmp_path, path)
 
 
 def lang(language):

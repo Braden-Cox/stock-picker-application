@@ -12,6 +12,7 @@ def getXAPI_scrape_posts(query, cursor=None):
         "https://api.getxapi.com/twitter/tweet/advanced_search",
         params=params,
         headers={"Authorization": "Bearer " + getXAPI_key},
+        timeout=(10,30), #10 second connection timeout, 30 second read timeout
     )
     return response.json()
 
@@ -21,6 +22,7 @@ def getXAPI_get_username_by_id(user_id):
         "https://api.getxapi.com/twitter/user/info_by_id",
         params={"userId": user_id},
         headers={"Authorization": "Bearer " + getXAPI_key},
+        timeout=(10,30), #10 second connection timeout, 30 second read timeout
     )
     data = response.json()
     if "data" not in data or "userName" not in data["data"]:
