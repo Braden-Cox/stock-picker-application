@@ -19,6 +19,25 @@ class RelevanceResponse(BaseModel):
     results: List[RelevanceResult]
 
 
+RELEVANCE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "is_relevant": {"type": "boolean"},
+                    "ticker": {"type": "string", "nullable": True},
+                },
+                "required": ["is_relevant"],
+            },
+        }
+    },
+    "required": ["results"],
+}
+
+
 def classify_relevance_with_gemini(
     posts: List[str], historical: bool = False, max_retries: int = 2
 ) -> RelevanceResponse:
@@ -32,18 +51,17 @@ def classify_relevance_with_gemini(
     last_error = None
     for attempt in range(max_retries):
         try:
-            response = client.interactions.create(
+            response = client.models.generate_content(
                 model="gemini-2.5-flash-lite",
-                input=prompt,
-                response_format={
-                    "type": "text",
-                    "mime_type": "application/json",
-                    "schema": RelevanceResponse.model_json_schema(),
+                contents=prompt,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": RELEVANCE_SCHEMA,
                 },
             )
-            output = response.output_text
+            output = response.text
             if output is None:
-                raise ValueError("Gemini response output_text is None")
+                raise ValueError("Gemini response text is None")
             output = output.strip()
             if output.startswith("```"):
                 output = output.split("\n", 1)[1]
