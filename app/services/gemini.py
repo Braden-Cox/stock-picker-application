@@ -39,7 +39,7 @@ RELEVANCE_SCHEMA = {
 
 
 def classify_relevance_with_gemini(
-    posts: List[str], historical: bool = False, max_retries: int = 2
+    posts: List[str], historical: bool = False, max_retries: int = 6
 ) -> RelevanceResponse:
     if historical:
         prompt = HISTORICAL_RELEVANCE_PROMPT
@@ -61,6 +61,16 @@ def classify_relevance_with_gemini(
             )
             output = response.text
             if output is None:
+                feedback = response.prompt_feedback
+                if feedback and feedback.block_reason:
+                    # Deterministic content block — retrying identical input won't help.
+                    if len(posts) == 1:
+                        print(f"Post blocked by Gemini safety filter ({feedback.block_reason}), marking not relevant: {posts[0][:80]!r}")
+                        return RelevanceResponse(results=[RelevanceResult(is_relevant=False)])
+                    mid = len(posts) // 2
+                    left = classify_relevance_with_gemini(posts[:mid], historical=historical, max_retries=max_retries)
+                    right = classify_relevance_with_gemini(posts[mid:], historical=historical, max_retries=max_retries)
+                    return RelevanceResponse(results=left.results + right.results)
                 raise ValueError("Gemini response text is None")
             output = output.strip()
             if output.startswith("```"):
@@ -71,4 +81,8 @@ def classify_relevance_with_gemini(
         except Exception as e:
             last_error = e
             print(f"Gemini response failed (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                wait = min(2 ** attempt, 60)  # exponential backoff, max 60 seconds
+                print(f"Retrying in {wait} seconds...")
+                time.sleep(wait)
     raise last_error
