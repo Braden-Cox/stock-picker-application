@@ -60,14 +60,14 @@ Run end to end on a real corpus of scraped posts:
  
 | Stage | Count |
 |---|---|
-| Posts scraped | 517,162 |
-| Posts stored (after engagement filter + dedupe) | 77,995 |
-| Classified relevant (actual stock opinions) | 14,019 (18%) |
-| Concrete, gradable picks (`is_valid`) | 3,553 |
-| Verified hit rate (vs +30/60/90-day price movement) | **32.5%** |
+| Posts scraped | 2,428,527 |
+| Posts stored (after engagement filter + dedupe) | 682,341 |
+| Classified relevant (actual stock opinions) | 177,846 (26%) |
+| Concrete, gradable picks (`is_valid`) | 79,341 |
+| Verified hit rate (vs +30/60/90-day price movement) | **32.04%** |
 | Whitelisted posters (≥50% hit rate) | 242 |
  
-The engagement filter does most of the culling up front: about 85% of scraped posts are dropped before any paid LLM call, so classification only ever runs on posts with enough traction to be worth grading.
+The engagement filter does most of the culling up front: about 82% of scraped posts are dropped before any paid LLM call, so classification only ever runs on posts with enough traction to be worth grading.
  
 The point this demonstrates is that the verification loop *works* — directional picks are graded against real price movement, and the credibility layer meaningfully separates posters (whitelist averaging ~0.70 hit rate against a greylist/blacklist tail). A 32.5% hit rate against a +3% directional bar is roughly what you'd expect from noisy retail chatter; the value is in the measurement being sound, not in any claim of edge.
  
